@@ -6,23 +6,22 @@
 #include <limits>    // numeric_limits<float>::max()
 #include <ctime>
 #include <algorithm>
-using namespace std;
+using std::string; using std::cin;
+using std::cout; using std::endl;
+using std::ifstream; using std::istream;
+using std::clog; using std::swap;
+using std::numeric_limits; using std::next_permutation;
 
 class City
 {
-public:
-    City(int cityNum, float x, float y)
-    {
-        this->cityNum = cityNum;
-        this->x = x;
-        this->y = y;
-    }
-
-    City() { }
-
+private:
+    friend class TabuSearch;
     int cityNum;
     float x;
     float y;
+public:
+    City(int cityNum, float x, float y) : cityNum(cityNum), x(x), y(y) { }
+    City() { }
 };
 
 class TabuSearch
@@ -39,28 +38,28 @@ private:
 public:
     TabuSearch(int numIterations, int numMaxTries); // initialization
     ~TabuSearch();
-    void initFromFile(string fileName);
-    void initFromStream();
+    void furtherInit(istream &in);
+    void init(string &file);
     int* genGreedySolution(int *solution, bool initialize); // generates greedy entry solution
     int* genRandomSolution(int *solution, bool initialize);
-    float calcAllDist(int *cityLabel); // returns distance of the whole route
+    float calcAllDist(const int *cityLabel) const; // returns distance of the whole route
     float calcEdgeDist(City *&a, City *&b) const; // returns distance between two cities
-    float calcNewDist(int *solution, int firstPair, int secondPair, float oldDist);
+    float calcNewDist(const int *solution, int firstPair, int secondPair, float oldDist) const;
     void calcTabuIters(int *localSolution, int i, int &tabuIFirst, int &tabuISec);
     void calcTabuIters2(int *localSolution, int i, int j, int &tabuIFirst, int &tabuISec);
     float checkAllPermutations();
-    void printBestSolution();
+    void printBestSolution() const;
     void tabuSearch();
 };
 
-inline void TabuSearch::printBestSolution()
+inline void TabuSearch::printBestSolution() const
 {
     for(int i=0; i<numCities+1; ++i)
         cout << globalSolution[i] << " ";
     cout << endl;
 }
 
-TabuSearch::TabuSearch(int numIterations, int numMaxTries)
+inline TabuSearch::TabuSearch(int numIterations, int numMaxTries)
 {
     this->numIterations = numIterations;
     this->numMaxTries = numMaxTries;
@@ -83,11 +82,25 @@ TabuSearch::~TabuSearch()
     }
 }
 
-void TabuSearch::initFromFile(string fileName)
+void TabuSearch::init(string &fileName)
 {
-    ifstream file(fileName.c_str());
-    if(file)
+    if(!fileName.empty())
     {
+        ifstream file(fileName.c_str());
+        if(file.good())
+        {
+            furtherInit(file);
+            file.close();
+        }
+        else
+            clog << "error opening file" << endl;
+    }
+    else
+       furtherInit(cin);
+}
+
+void TabuSearch::furtherInit(istream &file)
+{
         file >> numCities;
         tabuListLength = 2*numCities;
         if(tabuListLength <= 7) tabuListLength = 3;
@@ -110,40 +123,6 @@ void TabuSearch::initFromFile(string fileName)
         }
         cities[numCities] = cities[0];
         initialized = true;
-
-        /*cout << "num cities: " << cityNum << endl;
-        for(int i=0; i<numCities+1; ++i)
-        {
-            cout << cities[i]->cityNum << " " << cities[i]->x << " " << cities[i]->y << endl;
-        } */
-    }
-    else
-        cerr << "cant open file" << endl;
-}
-
-void TabuSearch::initFromStream()
-{
-    cin >> numCities;
-    tabuListLength = 2*numCities;
-    if(tabuListLength <= 7) tabuListLength = 3;
-    globalSolution = new int[numCities+1];
-    cities = new City*[numCities+1];
-    tabuList = new int *[numCities-1];
-    for(int i=0; i<numCities-1; ++i)
-    {
-        tabuList[i] = new int[numCities-1-i];
-        for(int j=0; j<numCities-1-i; ++j)
-            tabuList[i][j] = 0;
-    }
-
-    int cityNum;
-    float x, y;
-    for(int i=0; i<numCities; ++i)
-    {
-       cin >> cityNum >> x >> y;
-       cities[i] = new City(cityNum, x, y);
-    }
-    cities[numCities] = cities[0];
 }
 
 inline float TabuSearch::calcEdgeDist(City *&a, City *&b) const
@@ -151,7 +130,7 @@ inline float TabuSearch::calcEdgeDist(City *&a, City *&b) const
     return sqrt(pow((a->x - b->x), 2) + pow((a->y - b->y), 2));
 }
 
-inline float TabuSearch::calcAllDist(int *cityLabel)
+inline float TabuSearch::calcAllDist(const int *cityLabel) const
 {
     float dist = 0.0;
     for(int i=0; i<numCities; ++i) // go through all edges, city's length is numCities+1
@@ -212,12 +191,11 @@ int *TabuSearch::genRandomSolution(int *solution, bool initialize)
 //    for(int i=0; i<numCities+1; ++i)
 //        cout << solution[i] << " ";
 //    cout << endl;
-
     return solution;
 }
 
 // calculates distance after swaping two edge pairs
-inline float TabuSearch::calcNewDist(int *solution, int firstPair, int secondPair, float oldDist)
+inline float TabuSearch::calcNewDist(const int *solution, int firstPair, int secondPair, float oldDist) const
 {
     if(firstPair+1 == secondPair-1) // for example: 1->2->3->4 changes to 1->3->2->4
         return (oldDist - calcEdgeDist(cities[solution[firstPair]], cities[solution[firstPair+1]]) -\
@@ -340,7 +318,7 @@ void TabuSearch::tabuSearch()
 
             if(secondPair == 0)
             {
-                cout << "popraw parametry, secondPair==0" << endl;
+                clog << "popraw parametry,zmniejsz tabu length, secondPair==0" << endl;
             }
             calcTabuIters2(localSolution, firstPair, secondPair, tabuIFirst, tabuISec);
             tabuList[tabuIFirst][tabuISec] = tabuListLength;
@@ -409,7 +387,7 @@ int main()
     srand(time(NULL));
     string fileName = "dane9.txt";
     TabuSearch tabu(100,6);
-    tabu.initFromFile(fileName);
+    tabu.init(fileName);
     tabu.tabuSearch();
     tabu.printBestSolution();
    // float wynik = tabu.checkAllPermutations();
