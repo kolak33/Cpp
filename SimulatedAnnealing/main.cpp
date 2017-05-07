@@ -35,25 +35,20 @@ class SimulatedAnnealing
 private:
     int simListLength;
     int numCities;
-    int numIterations;
     int numMaxTries;
     City **globalSolution;
+    double globalSolutionDist;
     City **cities;
     int **tabuList;
     bool initialized;
-    int numTriesInIteration;
-    int phaseOneIters;
-    int mediumSearchBound;
-    int fullSearchBound;
 
     double endTemperatureBound;
     double temperature;
-    double annealingFactorLongSearch;
-    double annealingFactorRandSearch;
-    int longSearchBound;
+    double annealingFactor;
     int maxExecutionTime;
+    double greedySolutionDist;
 public:
-    SimulatedAnnealing(int numIterations, int numMaxTries); // initialization
+    SimulatedAnnealing(int numMaxTries); // initialization
     ~SimulatedAnnealing();
     void furtherInit(istream &in);
     void init(string &file);
@@ -68,14 +63,31 @@ public:
     void printBestSolution() const;
     void simmulatedAnnealing();
     void endComputations(City **solution);
+    bool boltzmanCondition(double temperature, double oldDistance, double newDistance);
 };
+
+inline bool SimulatedAnnealing::boltzmanCondition(double temperature, double oldDistance, double newDistance)
+{
+    return (double(rand()) / double(RAND_MAX) < exp(( -newDistance + oldDistance ) / temperature));
+}
 
 inline void SimulatedAnnealing::endComputations(City **solution)
 {
-    cout << calcAllDist(solution) << endl;
+    double score = calcAllDist(solution);
+    if(globalSolutionDist < score) // globalSolutionDist is greedyDistance
+    {
+        cout << globalSolutionDist;
+        // for(int i=0; i<numCities+1; ++i)
+        //     clog << globalSolution[i]->cityNum << " ";
+    }
+    else
+    {
+        cout << score;
+        // for(int i=0; i<numCities+1; ++i)
+        //     clog << solution[i]->cityNum << " ";
+    }
     cout << "END COMPUTATIONS" << endl;
-   // for(int i=0; i<numCities+1; ++i)
-   //     clog << solution[i]->cityNum << " ";
+
     exit(0);
 }
 
@@ -85,9 +97,8 @@ inline void SimulatedAnnealing::printBestSolution() const
         clog << globalSolution[i]->cityNum << " ";
 }
 
-inline SimulatedAnnealing::SimulatedAnnealing(int numIterations, int numMaxTries)
+inline SimulatedAnnealing::SimulatedAnnealing(int numMaxTries)
 {
-    this->numIterations = numIterations;
     this->numMaxTries = numMaxTries;
     initialized = false;
 }
@@ -129,32 +140,19 @@ void SimulatedAnnealing::init(string &fileName)
 void SimulatedAnnealing::furtherInit(istream &file)
 {
         file >> numCities;
-        simListLength = 2*numCities;
-        if(simListLength <= 7) simListLength = 3;
-        if(numCities > 20)
-            mediumSearchBound = numCities/20;
-        else
-            mediumSearchBound = 5;
-        fullSearchBound = numCities;
-       // phasteThreeIters = 2*numCities;
+
+
         if(numCities >= 6000)
         {
-            temperature = 101;
-            annealingFactorLongSearch = 5;
-            annealingFactorRandSearch = 0.2;
-            longSearchBound = 60;
-            phaseOneIters = 1*numCities;
-            fullSearchBound = 2*numCities; // so it never does it
+            temperature = 1;
+            annealingFactor = 0.9999;
         }
         else
         {
-            temperature = 400;
-            longSearchBound = 200;
-            annealingFactorLongSearch = 1;
-            annealingFactorRandSearch = 1;
-            phaseOneIters = 6*numCities;
+            temperature = 1;
+            annealingFactor = 0.99999;
         }
-        endTemperatureBound = 0;
+        endTemperatureBound = 0.00001;
 
         globalSolution = new City*[numCities+1];
         cities = new City*[numCities+1];
@@ -298,37 +296,13 @@ inline void SimulatedAnnealing::calcTabuIters2(City **localSolution, int i, int 
 void SimulatedAnnealing::simmulatedAnnealing()
 {
     City **localSolution = new City*[numCities+1];
-    double globalSolutionDist, localSolutionDist;
+    double localSolutionDist;
 
     double tempDist;
     double currentTemperature;
 
-
-    int whichTry;
-    int firstCity;
-    int secondCity;
-    double bestLocalSolutionDist;
-
-    // dodanie wszystkich indeksow mozliwych zamian krawedziowych
-    vector< pair<short int,short int> > allEdges;
-
-    allEdges.reserve((numCities-1)*(numCities-2)/2);
-    for(int i=1; i<numCities-1; ++i)
-        for(int j=i+1; j<numCities; ++j)
-            allEdges.push_back(std::make_pair(i,j));
-
-//    localSolution = genGreedySolution(localSolution, true);
-//    for(int i=0; i<numCities+1; ++i)
-//        globalSolution[i] = bestLocalSolution[i] = localSolution[i];
-//   // cout << "GREEDY: " << calcAllDist(globalSolution) << endl;
-//    globalSolutionDist = bestLocalSolutionDist = calcAllDist(localSolution);
-//     whichTry = 0;
-
     for(int tries=0; tries<numMaxTries; ++tries)
     {
-        //++tries;
-       // cout << "tries: " << tries << endl;
-        // initialize best global solution, and local solutions
         currentTemperature = temperature;
         if(tries == 0)
         {
@@ -337,185 +311,52 @@ void SimulatedAnnealing::simmulatedAnnealing()
                 globalSolution[i] = localSolution[i];
             cout << "GREEDY: " << calcAllDist(globalSolution) << endl;
             localSolutionDist = globalSolutionDist = calcAllDist(localSolution);
-            whichTry = 0;
         }
         else
         {
-            localSolution = genRandomSolution(localSolution, true);
+            localSolution = genRandomSolution(localSolution, false);
             localSolutionDist = calcAllDist(localSolution);
             cout << "STARTING SOLUTION: " << calcAllDist(localSolution) << endl;
         }
-        // calculate overall distance in newly created solution
-
-        //cout << "current dist: " << currentDist << endl;
 
 
-        numTriesInIteration = (3/2) * numCities; // starting number of tries in iteration
-        int maxTriesInIteration = 4*numCities;
+        while(currentTemperature > endTemperatureBound) // end computations condition
+        { 
+            for(int iterAtTemp = 0; iterAtTemp < 100; ++iterAtTemp)
+            {
+                int firstCity = rand()%(numCities-1) + 1; // [1; numCities-1]
+                int secondCity = rand()%(numCities-1) + 1; // [1; numCities-1]
+                if(firstCity > secondCity) swap(firstCity, secondCity);
 
-
-        /* PHASE ONE */
-
-        while(currentTemperature > endTemperatureBound) //TODO zmienic warunek zakonczenia
-        {
-            int k =0;
-            int h=0;
-            // just a random initialization in case no solution would be found
-
-            if(currentTemperature < longSearchBound) //TODO zmienic warunek
-            {   //cout << "TEMP1" << endl;
-                for(int i=1; i<numCities-1; ++i) // go through all possible two edge swaps, last pair is [numCities-3, numCities-2] and [numCities-1,numCities]
+                if(firstCity != secondCity)
                 {
-                    bestLocalSolutionDist = numeric_limits<double>::max();
-                    for(int j= i+1; j<numCities; ++j) // go through all ending pairs, last one is [numCities-1, numCities]
-                    {
-                        // find new solution
-                        tempDist = calcNewDist(localSolution, i, j, localSolutionDist);
-                        //cout << "tempDist: " << tempDist << endl;
-                        // if new solution is better then take it
-                        //cout << "DIFF: " << tempDist - localSolutionDist << endl;
-                        if(tempDist < bestLocalSolutionDist)
-                        {
-                            bestLocalSolutionDist = tempDist;
-                            firstCity = i;
-                            secondCity = j;
-//                            if(tempDist < globalSolutionDist)
-//                            {
-//                                globalSolutionDist = tempDist; // remember it as best one
-//                                //swap(globalSolution[i], globalSolution[j]);
-//                            }
-                        }
-//                        else
-//                        {
-//                            double a = (double(rand()) /double(RAND_MAX));
-//                            //double b = 1.0 / (1.0 + exp(float(tempDist - localSolutionDist)/temperature));
-//                            double b = exp(float(-tempDist + localSolutionDist)/temperature);
-//                            if(a < b)
-//                            {
-//                                if(++k < 50)
-//                                cout << a << " :lol1: " << b << " ,DELTA: " << -tempDist + localSolutionDist << endl;
-//                                //cout << 1.0 / (1.0 + exp(float(tempDist - localSolutionDist)/temperature)) << endl;
-//                                localSolutionDist = tempDist;
-//                                swap(localSolution[i], localSolution[j]);
-//                            }
-//                        }
+                    tempDist = calcNewDist(localSolution, firstCity, secondCity, localSolutionDist);
 
-                     }
-                    if(bestLocalSolutionDist < localSolutionDist)
+                    if(tempDist < localSolutionDist)
                     {
                         swap(localSolution[firstCity], localSolution[secondCity]);
-                        localSolutionDist = bestLocalSolutionDist;
+                        localSolutionDist = tempDist;
                     }
-                    else
+                    else if( boltzmanCondition(currentTemperature, localSolutionDist, tempDist) )
                     {
-                        double a = (double(rand()) /double(RAND_MAX));
-                        double b = exp(double(-bestLocalSolutionDist + localSolutionDist)/temperature);
-                        //cout << bestLocalSolutionDist << " wow " << localSolutionDist << endl;
-                        if( (a < b) && (bestLocalSolutionDist != localSolutionDist) )
-                        {
-                            swap(localSolution[firstCity], localSolution[secondCity]);
-                            //cout << a << " :lol1: " << b << " ,DELTA: " << -bestLocalSolutionDist + localSolutionDist << endl;
-                            localSolutionDist = bestLocalSolutionDist;
-                        }
+                        swap(localSolution[firstCity], localSolution[secondCity]);
+                        localSolutionDist = tempDist;
                     }
-                    actualTime = clock();
-                    if( (actualTime - startTime)/CLOCKS_PER_SEC >= maxExecutionTime) endComputations(localSolution);
-
                 }
             }
-            else
-            {
-                int maxRandSize = allEdges.size();
-                int r = rand()%(maxRandSize);
 
-                // shufflowanie numTriesInIteration wynikow i wybranie ich jako losowe
-                for(int i=0; i<numTriesInIteration; ++i)
-                {
-                    r = rand()%(maxRandSize - i) + i; // rand in range [i, maxRandSize)
-                    swap(allEdges[i], allEdges[r]);
-                }
-                for(int i=0; i<numTriesInIteration; ++i)
-                {
-                    r = rand()%(maxRandSize - i) + i; // rand in range [i, maxRandSize)
-                    swap(allEdges[i], allEdges[r]);
-                }
-                bestLocalSolutionDist = numeric_limits<double>::max();
-                for(int i=0; i<numTriesInIteration; ++i)
-                {
-                    //find best possible solution in current iteration, it can be worse than our best solution from previous iteration,
-                    // but global variable will remember best one so far in a try
-                    tempDist = calcNewDist(localSolution, allEdges[i].first, allEdges[i].second, localSolutionDist);
-
-                    //cout << "tempDist: " << tempDist << endl;
-                    if(tempDist < bestLocalSolutionDist)
-                    {
-                        bestLocalSolutionDist = tempDist;
-                        firstCity = allEdges[i].first;
-                        secondCity = allEdges[i].second;
-                    }
-
-                }
-
-                if(bestLocalSolutionDist < localSolutionDist)
-                {
-                    swap(localSolution[firstCity], localSolution[secondCity]);
-                    localSolutionDist = bestLocalSolutionDist;
-                }
-                else
-                {
-                    double a = (double(rand()) /double(RAND_MAX));
-                    double b = exp(double(-bestLocalSolutionDist + localSolutionDist)/temperature);
-                    if( (a < b) && (localSolutionDist != bestLocalSolutionDist) )
-                    {
-                        swap(localSolution[firstCity], localSolution[secondCity]);
-                        //cout << a << " :lol2: " << b << " ,DELTA: " << -bestLocalSolutionDist + localSolutionDist << endl;
-                        localSolutionDist = bestLocalSolutionDist;
-                    }
-                }
-
-                actualTime = clock();
-                if( (actualTime - startTime)/CLOCKS_PER_SEC >= maxExecutionTime) endComputations(localSolution);
-                if(numTriesInIteration < maxTriesInIteration) numTriesInIteration += 0.1 * numCities;
-                //cout << "TEMP" << endl;
-             }
-
-            // update best local solution if found one
-//            if(localSolutionDist < bestLocalSolutionDist)
-//            {
-//             //   cout << "best local: " << localSolutionDist << endl;
-//                bestLocalSolutionDist = localSolutionDist;
-//                for(int i=0; i<numCities+1; ++i)
-//                    bestLocalSolution[i] = localSolution[i];
-//            }
-            if(currentTemperature < longSearchBound)
-                currentTemperature = currentTemperature - annealingFactorLongSearch; // TODO update temperature in each iteration
-            else
-                currentTemperature = currentTemperature - annealingFactorRandSearch;
+            actualTime = clock();
+            if( (actualTime - startTime) / CLOCKS_PER_SEC >= maxExecutionTime) endComputations(localSolution);
+            currentTemperature = currentTemperature * annealingFactor; // update temperature in each iteration
         }
 
-//        if(bestLocalSolutionDist < globalSolutionDist)
-//        {
-//           // cout << "BEST GLOBAL: " << bestLocalSolutionDist << endl;
-//            globalSolutionDist = bestLocalSolutionDist;
-//            for(int i=0; i<numCities+1; ++i)
-//                globalSolution[i] = bestLocalSolution[i];
-//            whichTry = tries;
-//        }
-
-        cout << "LOCAL DIST: " << calcAllDist(localSolution) << endl;
-        cout << "GLOBAL DIST: " << globalSolutionDist << endl;
+        cout << "LOCAL DIST       : " << calcAllDist(localSolution) << endl;
+        cout << "LOCAL DIST ASSERT: " << localSolutionDist << endl;
         cout << "\n\n";
     }
 //    cout << "global solution: " << globalSolutionDist << endl;
 //    cout << "assert: " << calcAllDist(globalSolution) << endl;
 //    cout << "whichTry: " << whichTry << endl;
-
-//    for(int i=0; i<numCities-1; ++i)
-//    {
-//        for(int j=0; j<numCities-1-i; ++j)
-//            cout << tabuList[i][j] << " ";
-//        cout << endl;
-//    }
 
     delete []localSolution;
 }
@@ -540,67 +381,20 @@ float SimulatedAnnealing::checkAllPermutations()
     return minDist;
 }
 
-/*
- * f(x_nowe) > f(x_najlepsze_rozw) - Epsilon * H(x) ( H(x) = kara, wieksza tym bardziej im wczesniej byla zamiana tabu)
- * vec np. (1,2) (1,3) (1,4) (1,5) (2,3) (2,4) (2,5) ... (4,5)
- * vec_copy = vec
- * losujemy x_nowe, vec_copy -= x_nowe, wiec losowanie nastepnego nie bedzie trafialo na te same mozliwosci
- * agresywne zawezanie przez usuwanie np. wybierzemy (2,3) -> usuwanie wszystkich swapow z 2, no albo tylko te (2,3)
- * przechowywanie tabu, kiedy ostatnio zmienilismy swapa konkretnego i porownywanie w biegu
- *
- * przy symulowanym wyrzazaniu zmiana temperatury co iteracji o mala wartosc a co np 15 iteracji o wieksza wartosc
- */
-
-
 
 int main()
 {
-//       int temp2 = 140;
-//       while(temp2 > 1)
-//       {
-//           cout << temp2 << endl;
-//           temp2 = temp2*0.95;
-//       }
-
-//    int delEnd = 0;
-//    int temp = 1;
-//    while(temp < 70)
-//    {
-//        int delPocz = -200;
-//        while(delPocz < delEnd)
-//        {
-//            cout << "TEMP: " << temp << ", DELTA: " << delPocz << ", PROC: " << exp(float(delPocz)/temp) << endl;
-//            delPocz += 10;
-//        }
-//        temp += 5;
-//    }
-
-
     startTime = clock();
     srand(time(NULL));
 
-    string fileName = "dane.txt"; //TODO WYWALIC STRINGA NA NULLA XD
-    SimulatedAnnealing sim(123,5);
+    string fileName = "test-data4.txt"; //TODO WYWALIC STRINGA NA NULLA XD
+    SimulatedAnnealing sim(3);
     sim.init(fileName);
     //cout << "wczytalem" << endl;
     sim.simmulatedAnnealing();
     //sim.printBestSolution();
     cout << "\n\n\n\n\n";
 
-  //  int temp = 1;
 
-
-
-
-//    int temp = 8;
-//    while(temp > 1)
-//    {
-//        cout << temp << endl;
-//        temp = temp*0.95;
-//    }
-
-
-   // float wynik = tabu.checkAllPermutations();
-    //cout << wynik << endl;
     return 0;
 }
