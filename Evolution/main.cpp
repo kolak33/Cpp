@@ -409,7 +409,7 @@ void inverseCities(vector<City*>::iterator lower, vector<City*>::iterator upper,
 
         swap(*lower, *upper);
         //cout << "after swap" << endl;
-        if(lower != vec.begin())
+        //if(lower != vec.begin())
             --lower;
         //else cout << "LOWER SPADA" << endl;
         //if (upper == vec.end() - 1 && firstReverseCount >= 2) cout << "UPPER: revCount: " << firstReverseCount << endl;
@@ -417,7 +417,8 @@ void inverseCities(vector<City*>::iterator lower, vector<City*>::iterator upper,
 
         --firstReverseCount;
     }
-    //swap(*lower, *upper);
+	if(firstReverseCount == 1)
+    swap(*lower, *upper);
 
 
     if (lowerBound) // lower iterator moves to the end of vector
